@@ -7,6 +7,7 @@ const formidable = require('formidable')
 const db = require('../models')
 const path = require('path')
 const fs = require('fs')
+const Jimp = require('jimp')
 
 const auth = (req, res, next) => {
   passport.authenticate('jwt', {session: false}, (err, user, info) => {
@@ -107,26 +108,33 @@ router.get('/profile', auth, async (req, res, next) => {
   //////////////////
 router.patch('/profile', auth, async (req, res, next) => {
   const user = req.user
-// console.log(user);
+
   const form = new formidable.IncomingForm({ keepExtensions: true })
   form.uploadDir = path.join(process.cwd(), 'upload')
   form.parse(req, async (err, fields, files) => {
     if (err) {
       return next(err)
     }
+
     const valid = validation(fields, files)
-    console.log(files);
+    const pathToImage = path.join(process.cwd(), 'upload', files.avatar.newFilename)
+
     if (valid.err) {
       if (files.avatar) {
-        fs.unlinkSync(path.join(process.cwd(), 'upload', files.avatar.newFilename))
+        fs.unlinkSync(pathToImage)
         return res.status(409).json({message: valid.status})
       }
     }
+
     if (files.avatar) {
+      const image = await Jimp.read(pathToImage)
+      await image.resize(384, 384)
+      await image.writeAsync(pathToImage)
       const dirImage = path.join('./', files.avatar.newFilename)
-      console.log(dirImage);
+
       fields.image = dirImage
     }
+
     const newUser = await db.updateUserById(user._id, fields)
     
     if (!newUser) {
